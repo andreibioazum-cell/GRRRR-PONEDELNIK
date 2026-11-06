@@ -51,9 +51,12 @@ jobs:
         run: |
           mkdir -p generated.x86_64
           cd generated.x86_64
+          # Container filesystems reject user xattrs, so use the generic
+          # attribute emulation instead of the native one.
           ../configure \
             --cross-tools-prefix /tools/cross-tools-x86_64/bin/x86_64-unknown-haiku- \
-            --distro-compatibility default
+            --distro-compatibility default \
+            --no-xattr
 
       - name: Build PC profile
         run: |
