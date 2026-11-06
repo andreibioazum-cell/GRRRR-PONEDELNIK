@@ -2,6 +2,7 @@ name: Build and validate PonedelnikOS
 
 on:
   push:
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -27,6 +28,14 @@ jobs:
       run:
         shell: bash
 
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_COMPRESS: "true"
+      CCACHE_MAXSIZE: 700M
+      CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime,pch_defines
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -39,6 +48,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             attr \
+            ccache \
             dosfstools \
             file \
             mtools \
@@ -47,14 +57,45 @@ jobs:
             xorriso \
             zip
 
+      - name: Cache compiler output and downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ccache
+            generated.x86_64/download
+          key: haiku-x86_64-${{ github.sha }}
+          restore-keys: |
+            haiku-x86_64-
+
       - name: Configure x86_64 cross build
         run: |
+          # Wrap the cross compiler in ccache - Jam records these paths.
+          prefix="$GITHUB_WORKSPACE/ccache-bin/x86_64-unknown-haiku-"
+          mkdir -p ccache-bin
+          for tool in gcc g++; do
+            printf '#!/bin/sh\nexec ccache /tools/cross-tools-x86_64/bin/x86_64-unknown-haiku-%s "$@"\n' \
+              "$tool" > "ccache-bin/x86_64-unknown-haiku-$tool"
+            chmod +x "ccache-bin/x86_64-unknown-haiku-$tool"
+          done
+          for file in /tools/cross-tools-x86_64/bin/x86_64-unknown-haiku-*; do
+            name=$(basename "$file")
+            if [ ! -e "ccache-bin/$name" ]; then
+              ln -s "$file" "ccache-bin/$name"
+            fi
+          done
+
+          # Package compression level 9 dominates the image build time.
+          cat > build/jam/UserBuildConfig <<'EOF'
+          # CI favors build speed over package size.
+          HAIKU_PACKAGE_COMPRESSION_LEVEL = 1 ;
+          EOF
+
           mkdir -p generated.x86_64
           cd generated.x86_64
           # Container filesystems reject user xattrs, so use the generic
           # attribute emulation instead of the native one.
           ../configure \
-            --cross-tools-prefix /tools/cross-tools-x86_64/bin/x86_64-unknown-haiku- \
+            --cross-tools-prefix "$prefix" \
             --distro-compatibility default \
             --no-xattr
 
@@ -115,7 +156,7 @@ jobs:
 
       - name: Boot PC profile in QEMU
         run: |
-          status=0
+          : > qemu-serial.log
           timeout 180s qemu-system-x86_64 \
             -machine pc,accel=tcg \
             -m 1024M \
@@ -125,13 +166,30 @@ jobs:
             -serial file:qemu-serial.log \
             -monitor none \
             -no-reboot \
-            -no-shutdown || status=$?
+            -no-shutdown &
+          qemu_pid=$!
 
-          # A timeout is expected - the serial log proves that the kernel ran.
-          test "$status" -eq 124
+          # Leave as soon as the kernel reported itself - no need to wait out
+          # the whole timeout.
+          for _ in $(seq 1 90); do
+            if grep -qF "PonedelnikOS revision" qemu-serial.log; then
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          kill "$qemu_pid" 2>/dev/null || true
+          wait "$qemu_pid" 2>/dev/null || true
+
           test -s qemu-serial.log
           grep -F "Welcome to kernel debugger output" qemu-serial.log
           grep -F "PonedelnikOS revision" qemu-serial.log
+
+      - name: Show compiler cache stats
+        if: always()
+        run: ccache -s || true
 
       - name: Upload boot and build logs
         if: always()
