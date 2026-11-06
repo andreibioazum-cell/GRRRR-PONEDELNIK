@@ -22,14 +22,23 @@ jobs:
     container:
       image: ghcr.io/haiku/cross-compiler:x86_64-r1beta5@sha256:4ab09569c10226fa89843d4430cacf08e6ab7ee8457d71bf4b7dee57c33f140e
 
+    # Container run steps may otherwise use /bin/sh, which lacks Bash substrings.
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Mark checkout safe for Git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install build dependencies
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
+            attr \
             dosfstools \
             file \
             mtools \
