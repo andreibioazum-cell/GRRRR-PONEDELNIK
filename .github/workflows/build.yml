@@ -62,7 +62,6 @@ jobs:
             file \
             mtools \
             qemu-system-x86 \
-            qemu-utils \
             xorriso \
             zip
 
@@ -100,10 +99,8 @@ jobs:
           # CI favors build speed over package size.
           HAIKU_PACKAGE_COMPRESSION_LEVEL = 1 ;
 
-          # Name the images here - a monolithicFlat VMDK embeds its own file
-          # name in the extent descriptor, so renaming it afterwards breaks it.
+          # Name the image here instead of renaming the built file.
           HAIKU_ANYBOOT_NAME = PonedelnikOS.iso ;
-          HAIKU_VMWARE_IMAGE_NAME = PonedelnikOS.vmdk ;
           EOF
 
           mkdir -p generated.x86_64
@@ -147,29 +144,6 @@ jobs:
           assert image[32769:32774] == b"CD001", "missing ISO9660 descriptor"
           print("PC image layout is valid")
           PY
-
-      - name: Build emulator profile
-        run: |
-          cd generated.x86_64
-          status=0
-          jam -q -j"$(nproc)" -sHAIKU_REVISION="$HAIKU_REVISION" \
-            @minimum-raw haiku-vmware-image \
-            > ../build-emulator.log 2>&1 || status=$?
-          tail -n 40 ../build-emulator.log
-          if [ "$status" -ne 0 ]; then
-            python3 ../.github/scripts/report_build_errors.py ../build-emulator.log
-            exit "$status"
-          fi
-          ls -l PonedelnikOS.vmdk
-          mkdir -p ../release/Emulator
-          cp PonedelnikOS.vmdk ../release/Emulator/PonedelnikOS.vmdk
-
-      - name: Validate emulator profile
-        run: |
-          test -s release/Emulator/PonedelnikOS.vmdk
-          file release/Emulator/PonedelnikOS.vmdk
-          qemu-img info --output=json release/Emulator/PonedelnikOS.vmdk \
-            | python3 -c 'import json, sys; info = json.load(sys.stdin); assert info["format"] == "vmdk"; assert info["virtual-size"] > 0; print("Emulator image layout is valid")'
 
       - name: Boot PC profile in QEMU
         run: |
@@ -216,19 +190,26 @@ jobs:
           path: |
             qemu-serial.log
             build-pc.log
-            build-emulator.log
           if-no-files-found: warn
           retention-days: 14
 
       - name: Create zip
         env:
           PACKAGE_NAME: PonedelnikOS-${{ github.sha }}.zip
-        run: (cd release && zip -qr "../$PACKAGE_NAME" PC Emulator)
+        run: (cd release && zip -qr "../$PACKAGE_NAME" PC)
 
       - name: Upload package
         uses: actions/upload-artifact@v6
         with:
           name: PonedelnikOS-${{ github.sha }}
           path: PonedelnikOS-${{ github.sha }}.zip
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v6
+        with:
+          name: PonedelnikOS-iso-${{ github.sha }}
+          path: release/PC/PonedelnikOS.iso
           compression-level: 0
           retention-days: 14

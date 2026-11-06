@@ -30,7 +30,9 @@ Goals
 Trying PonedelnikOS
 ---------------
 PonedelnikOS images are built from this repository by the GitHub Actions
-workflow in `.github/workflows/build.yml`.
+workflow in `.github/workflows/build.yml`. It publishes a bootable
+`PonedelnikOS.iso` - an anyboot image that can be written to a CD/DVD or a USB
+stick, or attached to a virtual machine as a CD drive.
 
 Upstream Haiku provides pre-built [nightly images](http://download.haiku-os.org/) and
 [release images](https://www.haiku-os.org/get-haiku). Haiku is compatible
