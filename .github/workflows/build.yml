@@ -22,7 +22,7 @@ jobs:
   build:
     name: Build and validate bootable images
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 180
 
     # The upstream cross-compiler image provides Jam and the x86_64 toolchain.
     container:
@@ -116,8 +116,10 @@ jobs:
         run: |
           cd generated.x86_64
           status=0
+          # nightly selects the regular image definition - full desktop,
+          # fonts, translators and drivers. minimum is a bare service image.
           jam -q -j"$(nproc)" -sHAIKU_REVISION="$HAIKU_REVISION" \
-            @minimum-raw haiku-anyboot-image \
+            @nightly-raw haiku-anyboot-image \
             > ../build-pc.log 2>&1 || status=$?
           tail -n 40 ../build-pc.log
           if [ "$status" -ne 0 ]; then
