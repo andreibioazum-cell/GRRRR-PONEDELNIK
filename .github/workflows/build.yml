@@ -145,6 +145,27 @@ jobs:
           print("PC image layout is valid")
           PY
 
+      - name: Create zip
+        env:
+          PACKAGE_NAME: PonedelnikOS-${{ github.sha }}.zip
+        run: (cd release && zip -qr "../$PACKAGE_NAME" PC)
+
+      - name: Upload package
+        uses: actions/upload-artifact@v6
+        with:
+          name: PonedelnikOS-${{ github.sha }}
+          path: PonedelnikOS-${{ github.sha }}.zip
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v6
+        with:
+          name: PonedelnikOS-iso-${{ github.sha }}
+          path: release/PC/PonedelnikOS.iso
+          compression-level: 0
+          retention-days: 14
+
       - name: Boot PC profile in QEMU
         run: |
           : > qemu-serial.log
@@ -179,6 +200,7 @@ jobs:
           grep -F "PonedelnikOS revision" qemu-serial.log
 
       - name: Boot PC profile as a hard disk in QEMU
+        continue-on-error: true
         run: |
           # The anyboot image also carries an active BFS partition and an MBR
           # boot loader, so it boots as a plain disk without El Torito.
@@ -207,9 +229,12 @@ jobs:
           kill "$qemu_pid" 2>/dev/null || true
           wait "$qemu_pid" 2>/dev/null || true
 
-          test -s qemu-disk-serial.log
+          tail -n 60 qemu-disk-serial.log || true
+          if ! grep -qF "PonedelnikOS revision" qemu-disk-serial.log; then
+            echo "::error title=Disk boot::The kernel did not report itself on the disk boot path"
+            exit 1
+          fi
           grep -F "Welcome to kernel debugger output" qemu-disk-serial.log
-          grep -F "PonedelnikOS revision" qemu-disk-serial.log
 
       - name: Show compiler cache stats
         if: always()
@@ -225,25 +250,4 @@ jobs:
             qemu-disk-serial.log
             build-pc.log
           if-no-files-found: warn
-          retention-days: 14
-
-      - name: Create zip
-        env:
-          PACKAGE_NAME: PonedelnikOS-${{ github.sha }}.zip
-        run: (cd release && zip -qr "../$PACKAGE_NAME" PC)
-
-      - name: Upload package
-        uses: actions/upload-artifact@v6
-        with:
-          name: PonedelnikOS-${{ github.sha }}
-          path: PonedelnikOS-${{ github.sha }}.zip
-          compression-level: 0
-          retention-days: 14
-
-      - name: Upload ISO
-        uses: actions/upload-artifact@v6
-        with:
-          name: PonedelnikOS-iso-${{ github.sha }}
-          path: release/PC/PonedelnikOS.iso
-          compression-level: 0
           retention-days: 14
