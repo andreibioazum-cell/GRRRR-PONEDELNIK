@@ -60,7 +60,14 @@ jobs:
           cd generated.x86_64
           # CI clones may not contain upstream hrev tags.
           revision="hrev0+${GITHUB_SHA:0:7}"
-          jam -q -j"$(nproc)" -sHAIKU_REVISION="$revision" @minimum-anyboot
+          status=0
+          jam -q -j"$(nproc)" -sHAIKU_REVISION="$revision" @minimum-anyboot \
+            > ../build-pc.log 2>&1 || status=$?
+          tail -n 40 ../build-pc.log
+          if [ "$status" -ne 0 ]; then
+            python3 ../.github/scripts/report_build_errors.py ../build-pc.log
+            exit "$status"
+          fi
           mkdir -p ../release/PC
           cp haiku-minimum-anyboot.iso ../release/PC/PonedelnikOS.iso
 
@@ -85,7 +92,14 @@ jobs:
         run: |
           cd generated.x86_64
           revision="hrev0+${GITHUB_SHA:0:7}"
-          jam -q -j"$(nproc)" -sHAIKU_REVISION="$revision" @minimum-vmware
+          status=0
+          jam -q -j"$(nproc)" -sHAIKU_REVISION="$revision" @minimum-vmware \
+            > ../build-emulator.log 2>&1 || status=$?
+          tail -n 40 ../build-emulator.log
+          if [ "$status" -ne 0 ]; then
+            python3 ../.github/scripts/report_build_errors.py ../build-emulator.log
+            exit "$status"
+          fi
           mkdir -p ../release/Emulator
           cp haiku-minimum.vmdk ../release/Emulator/PonedelnikOS.vmdk
 
@@ -116,12 +130,15 @@ jobs:
           grep -F "Welcome to kernel debugger output" qemu-serial.log
           grep -F "PonedelnikOS revision" qemu-serial.log
 
-      - name: Upload boot logs
+      - name: Upload boot and build logs
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: ponedelnikos-boot-logs-${{ github.sha }}
-          path: qemu-serial.log
+          name: ponedelnikos-logs-${{ github.sha }}
+          path: |
+            qemu-serial.log
+            build-pc.log
+            build-emulator.log
           if-no-files-found: warn
           retention-days: 14
 
