@@ -12,8 +12,15 @@ ERROR_PATTERN = re.compile(
 	r"Segmentation fault|Permission denied|Operation not supported")
 
 CONTEXT = 8
+SOLVER_CONTEXT = 30
 MAX_ANNOTATION_CHARS = 2800
-TAIL_LINES = 150
+TAIL_LINES = 100
+
+# Package dependency problems are reported as a problem/solution list.
+SOLVER_PATTERN = re.compile(
+	r"nothing provides|Cannot install|problem \d|solution \d|"
+	r"conflicting requests|does not belong to a distupgrade repository|"
+	r"Failed to (?:open|resolve|install)|ERROR:", re.IGNORECASE)
 
 
 def escape(text):
@@ -44,6 +51,18 @@ def main():
 	print("=== last log lines ===")
 	print(tail)
 	annotate("Tail of build log:\n" + tail)
+
+	solver_hits = [i for i, line in enumerate(lines) if SOLVER_PATTERN.search(line)]
+	if solver_hits:
+		chunks = []
+		for index in solver_hits[-4:]:
+			start = max(0, index - SOLVER_CONTEXT)
+			end = min(len(lines), index + SOLVER_CONTEXT + 1)
+			chunks.append("\n".join(lines[start:end]))
+		solver_text = "\n...\n".join(chunks)
+		print("=== package solver diagnostics ===")
+		print(solver_text)
+		annotate("Package solver diagnostics:\n" + solver_text)
 
 	hits = [i for i, line in enumerate(lines) if ERROR_PATTERN.search(line)]
 	selected = []

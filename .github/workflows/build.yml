@@ -35,6 +35,7 @@ jobs:
       CCACHE_COMPRESS: "true"
       CCACHE_MAXSIZE: 700M
       CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime,pch_defines
+      WGETRC: ${{ github.workspace }}/wgetrc
 
     steps:
       - name: Checkout repository
@@ -69,6 +70,8 @@ jobs:
 
       - name: Configure x86_64 cross build
         run: |
+          # Package downloads would otherwise flood the build log.
+          printf 'quiet = on\nshow_progress = off\n' > "$GITHUB_WORKSPACE/wgetrc"
           # Wrap the cross compiler in ccache - Jam records these paths.
           prefix="$GITHUB_WORKSPACE/ccache-bin/x86_64-unknown-haiku-"
           mkdir -p ccache-bin
