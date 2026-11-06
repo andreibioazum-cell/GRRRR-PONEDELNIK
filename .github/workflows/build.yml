@@ -5,6 +5,11 @@ on:
     branches: [master]
   pull_request:
   workflow_dispatch:
+    inputs:
+      haiku_revision:
+        description: "Build revision - this fork has no upstream hrev tags"
+        required: false
+        default: "hrev59866_5"
 
 permissions:
   contents: read
@@ -36,6 +41,9 @@ jobs:
       CCACHE_MAXSIZE: 700M
       CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime,pch_defines
       WGETRC: ${{ github.workspace }}/wgetrc
+      # The pinned HaikuPorts packages require at least this revision, and a
+      # shallow fork clone carries no hrev tags to derive it from.
+      HAIKU_REVISION: ${{ inputs.haiku_revision || 'hrev59866_5' }}
 
     steps:
       - name: Checkout repository
@@ -105,10 +113,8 @@ jobs:
       - name: Build PC profile
         run: |
           cd generated.x86_64
-          # CI clones may not contain upstream hrev tags.
-          revision="hrev0+${GITHUB_SHA:0:7}"
           status=0
-          jam -q -j"$(nproc)" -sHAIKU_REVISION="$revision" @minimum-anyboot \
+          jam -q -j"$(nproc)" -sHAIKU_REVISION="$HAIKU_REVISION" @minimum-anyboot \
             > ../build-pc.log 2>&1 || status=$?
           tail -n 40 ../build-pc.log
           if [ "$status" -ne 0 ]; then
@@ -138,9 +144,8 @@ jobs:
       - name: Build emulator profile
         run: |
           cd generated.x86_64
-          revision="hrev0+${GITHUB_SHA:0:7}"
           status=0
-          jam -q -j"$(nproc)" -sHAIKU_REVISION="$revision" @minimum-vmware \
+          jam -q -j"$(nproc)" -sHAIKU_REVISION="$HAIKU_REVISION" @minimum-vmware \
             > ../build-emulator.log 2>&1 || status=$?
           tail -n 40 ../build-emulator.log
           if [ "$status" -ne 0 ]; then
