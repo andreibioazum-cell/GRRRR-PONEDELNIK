@@ -119,13 +119,15 @@ jobs:
         run: |
           cd generated.x86_64
           status=0
-          jam -q -j"$(nproc)" -sHAIKU_REVISION="$HAIKU_REVISION" @minimum-anyboot \
+          jam -q -j"$(nproc)" -sHAIKU_REVISION="$HAIKU_REVISION" \
+            @minimum-raw haiku-anyboot-image \
             > ../build-pc.log 2>&1 || status=$?
           tail -n 40 ../build-pc.log
           if [ "$status" -ne 0 ]; then
             python3 ../.github/scripts/report_build_errors.py ../build-pc.log
             exit "$status"
           fi
+          ls -l PonedelnikOS.iso
           mkdir -p ../release/PC
           cp PonedelnikOS.iso ../release/PC/PonedelnikOS.iso
 
@@ -150,13 +152,15 @@ jobs:
         run: |
           cd generated.x86_64
           status=0
-          jam -q -j"$(nproc)" -sHAIKU_REVISION="$HAIKU_REVISION" @minimum-vmware \
+          jam -q -j"$(nproc)" -sHAIKU_REVISION="$HAIKU_REVISION" \
+            @minimum-raw haiku-vmware-image \
             > ../build-emulator.log 2>&1 || status=$?
           tail -n 40 ../build-emulator.log
           if [ "$status" -ne 0 ]; then
             python3 ../.github/scripts/report_build_errors.py ../build-emulator.log
             exit "$status"
           fi
+          ls -l PonedelnikOS.vmdk
           mkdir -p ../release/Emulator
           cp PonedelnikOS.vmdk ../release/Emulator/PonedelnikOS.vmdk
 
