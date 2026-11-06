@@ -178,6 +178,39 @@ jobs:
           grep -F "Welcome to kernel debugger output" qemu-serial.log
           grep -F "PonedelnikOS revision" qemu-serial.log
 
+      - name: Boot PC profile as a hard disk in QEMU
+        run: |
+          # The anyboot image also carries an active BFS partition and an MBR
+          # boot loader, so it boots as a plain disk without El Torito.
+          : > qemu-disk-serial.log
+          timeout 180s qemu-system-x86_64 \
+            -machine pc,accel=tcg \
+            -m 1024M \
+            -drive file=release/PC/PonedelnikOS.iso,format=raw,if=ide \
+            -boot c \
+            -display none \
+            -serial file:qemu-disk-serial.log \
+            -monitor none \
+            -no-reboot \
+            -no-shutdown &
+          qemu_pid=$!
+
+          for _ in $(seq 1 90); do
+            if grep -qF "PonedelnikOS revision" qemu-disk-serial.log; then
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          kill "$qemu_pid" 2>/dev/null || true
+          wait "$qemu_pid" 2>/dev/null || true
+
+          test -s qemu-disk-serial.log
+          grep -F "Welcome to kernel debugger output" qemu-disk-serial.log
+          grep -F "PonedelnikOS revision" qemu-disk-serial.log
+
       - name: Show compiler cache stats
         if: always()
         run: ccache -s || true
@@ -189,6 +222,7 @@ jobs:
           name: ponedelnikos-logs-${{ github.sha }}
           path: |
             qemu-serial.log
+            qemu-disk-serial.log
             build-pc.log
           if-no-files-found: warn
           retention-days: 14
