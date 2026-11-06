@@ -1,5 +1,10 @@
-Building Haiku
+Building PonedelnikOS
 ==========================
+PonedelnikOS is built from the Haiku source tree. Internal Haiku target,
+package, and tool names are kept for compatibility. The GitHub Actions
+workflow in `.github/workflows/build.yml` builds and validates the PC and
+emulator images.
+
 This is a overview into the process of building HAIKU from source.
 An online version is available at <https://www.haiku-os.org/guides/building/>.
 

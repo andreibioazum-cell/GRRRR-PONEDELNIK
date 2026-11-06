@@ -986,10 +986,10 @@ SysInfoView::_GetOSVersion()
 	// add system revision to os version
 	const char* hrev = __get_haiku_revision();
 	if (hrev != NULL)
-		revision.SetToFormat(B_TRANSLATE_COMMENT("Version: %s",
+		revision.SetToFormat(B_TRANSLATE_COMMENT("PonedelnikOS - Version: %s",
 			"Version: R1 or hrev99999"), hrev);
 	else
-		revision = B_TRANSLATE("Version:");
+		revision = B_TRANSLATE("PonedelnikOS - Version:");
 
 	return revision;
 }
@@ -1546,12 +1546,12 @@ AboutView::_CreateCreditsView()
 		fCreditsView, B_WILL_DRAW | B_FRAME_EVENTS, false, true,
 		B_PLAIN_BORDER);
 
-	// Haiku copyright
+	// PonedelnikOS branding - the original Haiku copyright stays below
 	BFont font(be_bold_font);
 	font.SetSize(font.Size() + 4);
 
 	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
-	fCreditsView->Insert("Haiku\n");
+	fCreditsView->Insert("PonedelnikOS\n");
 
 	time_t time = ::time(NULL);
 	struct tm* tm = localtime(&time);
@@ -1565,6 +1565,10 @@ AboutView::_CreateCreditsView()
 
 	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
 	fCreditsView->Insert(text.String());
+
+	fCreditsView->Insert(B_TRANSLATE("PonedelnikOS is based on Haiku. "
+		"The original authors and copyright notices are preserved."
+		"\n\n"));
 
 	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
 	fCreditsView->Insert(B_TRANSLATE("The copyright to the Haiku code is "

@@ -1,0 +1,130 @@
+name: Build and validate PonedelnikOS
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ponedelnikos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and validate bootable images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    # The upstream cross-compiler image provides Jam and the x86_64 toolchain.
+    container:
+      image: ghcr.io/haiku/cross-compiler:x86_64-r1beta5@sha256:4ab09569c10226fa89843d4430cacf08e6ab7ee8457d71bf4b7dee57c33f140e
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            dosfstools \
+            file \
+            mtools \
+            qemu-system-x86 \
+            qemu-utils \
+            xorriso \
+            zip
+
+      - name: Configure x86_64 cross build
+        run: |
+          mkdir -p generated.x86_64
+          cd generated.x86_64
+          ../configure \
+            --cross-tools-prefix /tools/cross-tools-x86_64/bin/x86_64-unknown-haiku- \
+            --distro-compatibility default
+
+      - name: Build PC profile
+        run: |
+          cd generated.x86_64
+          # CI clones may not contain upstream hrev tags.
+          revision="hrev0+${GITHUB_SHA:0:7}"
+          jam -q -j"$(nproc)" -sHAIKU_REVISION="$revision" @minimum-anyboot
+          mkdir -p ../release/PC
+          cp haiku-minimum-anyboot.iso ../release/PC/PonedelnikOS.iso
+
+      - name: Validate PC profile
+        run: |
+          test -s release/PC/PonedelnikOS.iso
+          file release/PC/PonedelnikOS.iso
+          xorriso -indev release/PC/PonedelnikOS.iso -toc
+
+          # The anyboot image must keep a bootable MBR and an ISO9660 volume.
+          python3 - <<'PY'
+          from pathlib import Path
+
+          image = Path("release/PC/PonedelnikOS.iso").read_bytes()
+          assert image[510:512] == b"\x55\xaa", "missing MBR signature"
+          assert image[446 + 4] == 0xEB, "missing BFS boot partition"
+          assert image[32769:32774] == b"CD001", "missing ISO9660 descriptor"
+          print("PC image layout is valid")
+          PY
+
+      - name: Build emulator profile
+        run: |
+          cd generated.x86_64
+          revision="hrev0+${GITHUB_SHA:0:7}"
+          jam -q -j"$(nproc)" -sHAIKU_REVISION="$revision" @minimum-vmware
+          mkdir -p ../release/Emulator
+          cp haiku-minimum.vmdk ../release/Emulator/PonedelnikOS.vmdk
+
+      - name: Validate emulator profile
+        run: |
+          test -s release/Emulator/PonedelnikOS.vmdk
+          file release/Emulator/PonedelnikOS.vmdk
+          qemu-img info --output=json release/Emulator/PonedelnikOS.vmdk \
+            | python3 -c 'import json, sys; info = json.load(sys.stdin); assert info["format"] == "vmdk"; assert info["virtual-size"] > 0; print("Emulator image layout is valid")'
+
+      - name: Boot PC profile in QEMU
+        run: |
+          status=0
+          timeout 180s qemu-system-x86_64 \
+            -machine pc,accel=tcg \
+            -m 1024M \
+            -cdrom release/PC/PonedelnikOS.iso \
+            -boot d \
+            -display none \
+            -serial file:qemu-serial.log \
+            -monitor none \
+            -no-reboot \
+            -no-shutdown || status=$?
+
+          # A timeout is expected - the serial log proves that the kernel ran.
+          test "$status" -eq 124
+          test -s qemu-serial.log
+          grep -F "Welcome to kernel debugger output" qemu-serial.log
+          grep -F "PonedelnikOS revision" qemu-serial.log
+
+      - name: Upload boot logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ponedelnikos-boot-logs-${{ github.sha }}
+          path: qemu-serial.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Create zip
+        env:
+          PACKAGE_NAME: PonedelnikOS-${{ github.sha }}.zip
+        run: (cd release && zip -qr "../$PACKAGE_NAME" PC Emulator)
+
+      - name: Upload package
+        uses: actions/upload-artifact@v6
+        with:
+          name: PonedelnikOS-${{ github.sha }}
+          path: PonedelnikOS-${{ github.sha }}.zip
+          compression-level: 0
+          retention-days: 14
