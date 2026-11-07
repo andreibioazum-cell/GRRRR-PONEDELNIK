@@ -1,3 +1,8 @@
+PonedelnikOS is a downstream operating system based on Haiku. The original
+copyright notices and author credits are preserved. Copyright in the original
+Haiku code remains with Haiku, Inc. and the respective authors where expressly
+noted in the source. See `NOTICE.md`.
+
 The vast majority of code in this repository was written by the Haiku Project,
 and is licensed under the MIT license, which appears below. There are some
 notable exceptions to this, such as the GNU C library (which is under the GPL)

@@ -1,14 +1,25 @@
-Haiku
+PonedelnikOS
 =======================
-**[Homepage](https://www.haiku-os.org/)
+**[Upstream Homepage](https://www.haiku-os.org/)
 | [Mailing Lists](https://www.haiku-os.org/community/ml)
 | [IRC Channels](https://www.haiku-os.org/community/irc)
 | [Issue Tracker](https://dev.haiku-os.org/)
 | [API docs](https://api.haiku-os.org)**
 
+PonedelnikOS is a downstream operating system based on Haiku. It keeps the
+Haiku code base, build system, and application compatibility, while using the
+PonedelnikOS name for its own images and user-facing branding.
+
 Haiku is an open-source operating system that specifically targets personal
 computing. Inspired by the BeOS, Haiku is fast, simple to use, easy to learn
 and yet very powerful.
+
+Attribution
+------------
+PonedelnikOS is derived from Haiku. The original copyright notices and author
+credits are kept in the source files. Copyright in the original Haiku code
+remains with Haiku, Inc. and the respective authors where expressly noted.
+See `License.md` and `NOTICE.md`.
 
 Goals
 ------------
@@ -16,22 +27,28 @@ Goals
  * Clean, clear, concise code.
  * Unified desktop environment.
 
-Trying Haiku
+Trying PonedelnikOS
 ---------------
-Haiku provides pre-built [nightly images](http://download.haiku-os.org/) and
+PonedelnikOS images are built from this repository by the GitHub Actions
+workflow in `.github/workflows/build.yml`. It publishes a bootable
+`PonedelnikOS.iso` - an anyboot image that can be written to a CD/DVD or a USB
+stick, or attached to a virtual machine as a CD drive.
+
+Upstream Haiku provides pre-built [nightly images](http://download.haiku-os.org/) and
 [release images](https://www.haiku-os.org/get-haiku). Haiku is compatible
 with a large variety of hardware, but in case you don't want to "take the
 plunge" and install Haiku on bare metal, you can install it on a virtual
 machine (VM) instead. If you've never used a VM before, you can follow one of
 the ["Emulating Haiku"](https://www.haiku-os.org/guides/virtualizing/) guides.
 
-Compiling Haiku
+Compiling PonedelnikOS
 ---------------
-See `ReadMe.Compiling`.
+See `ReadMe.Compiling.md`. The build still uses Haiku's `configure` and Jam
+tooling. Internal Haiku target and package names are kept for compatibility.
 
 Contributing
 -------------------
-Haiku is a meritocratic open source project with a large variety of tasks. Even
+Upstream Haiku is a meritocratic open source project with a large variety of tasks. Even
 if you can't write code, *you can still help*! Haiku needs designers,
 (technical) writers, translators, testers... [Get involved](https://www.haiku-os.org/community/getting-involved/)
 and help out!

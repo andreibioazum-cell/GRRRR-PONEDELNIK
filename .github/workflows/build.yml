@@ -1,0 +1,352 @@
+name: Build and validate PonedelnikOS
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      haiku_revision:
+        description: "Build revision - this fork has no upstream hrev tags"
+        required: false
+        default: "hrev59866_5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ponedelnikos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and validate bootable images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    # The upstream cross-compiler image provides Jam and the x86_64 toolchain.
+    container:
+      image: ghcr.io/haiku/cross-compiler:x86_64-r1beta5@sha256:4ab09569c10226fa89843d4430cacf08e6ab7ee8457d71bf4b7dee57c33f140e
+
+    # Container run steps may otherwise use /bin/sh, which lacks Bash substrings.
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_COMPRESS: "true"
+      CCACHE_MAXSIZE: 700M
+      CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime,pch_defines
+      WGETRC: ${{ github.workspace }}/wgetrc
+      # The pinned HaikuPorts packages require at least this revision, and a
+      # shallow fork clone carries no hrev tags to derive it from.
+      HAIKU_REVISION: ${{ inputs.haiku_revision || 'hrev59866_5' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Mark checkout safe for Git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            attr \
+            ccache \
+            dosfstools \
+            file \
+            mtools \
+            qemu-system-x86 \
+            xorriso \
+            zip
+
+      - name: Cache compiler output and downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ccache
+            generated.x86_64/download
+          key: haiku-x86_64-${{ github.sha }}
+          restore-keys: |
+            haiku-x86_64-
+
+      - name: Configure x86_64 cross build
+        run: |
+          # Package downloads would otherwise flood the build log.
+          printf 'quiet = on\nshow_progress = off\n' > "$GITHUB_WORKSPACE/wgetrc"
+          # Wrap the cross compiler in ccache - Jam records these paths.
+          prefix="$GITHUB_WORKSPACE/ccache-bin/x86_64-unknown-haiku-"
+          mkdir -p ccache-bin
+          for tool in gcc g++; do
+            printf '#!/bin/sh\nexec ccache /tools/cross-tools-x86_64/bin/x86_64-unknown-haiku-%s "$@"\n' \
+              "$tool" > "ccache-bin/x86_64-unknown-haiku-$tool"
+            chmod +x "ccache-bin/x86_64-unknown-haiku-$tool"
+          done
+          for file in /tools/cross-tools-x86_64/bin/x86_64-unknown-haiku-*; do
+            name=$(basename "$file")
+            if [ ! -e "ccache-bin/$name" ]; then
+              ln -s "$file" "ccache-bin/$name"
+            fi
+          done
+
+          # Package compression level 9 dominates the image build time.
+          cat > build/jam/UserBuildConfig <<'EOF'
+          # CI favors build speed over package size.
+          HAIKU_PACKAGE_COMPRESSION_LEVEL = 1 ;
+
+          # Name the image here instead of renaming the built file.
+          HAIKU_ANYBOOT_NAME = PonedelnikOS.iso ;
+          EOF
+
+          mkdir -p generated.x86_64
+          cd generated.x86_64
+          # Container filesystems reject user xattrs, so use the generic
+          # attribute emulation instead of the native one.
+          ../configure \
+            --cross-tools-prefix "$prefix" \
+            --distro-compatibility default \
+            --no-xattr
+
+      - name: Build PC profile
+        run: |
+          cd generated.x86_64
+          status=0
+          jam -q -j"$(nproc)" -sHAIKU_REVISION="$HAIKU_REVISION" \
+            @minimum-raw haiku-anyboot-image \
+            > ../build-pc.log 2>&1 || status=$?
+          tail -n 40 ../build-pc.log
+          if [ "$status" -ne 0 ]; then
+            python3 ../.github/scripts/report_build_errors.py ../build-pc.log
+            exit "$status"
+          fi
+          ls -l PonedelnikOS.iso
+          mkdir -p ../release/PC
+          cp PonedelnikOS.iso ../release/PC/PonedelnikOS.iso
+
+      - name: Validate PC profile
+        run: |
+          test -s release/PC/PonedelnikOS.iso
+          file release/PC/PonedelnikOS.iso
+          xorriso -indev release/PC/PonedelnikOS.iso -toc
+
+          # The anyboot image must keep a bootable MBR and an ISO9660 volume.
+          python3 - <<'PY'
+          import struct
+          from pathlib import Path
+
+          image = Path("release/PC/PonedelnikOS.iso").read_bytes()
+          assert image[510:512] == b"\x55\xaa", "missing MBR signature"
+          assert image[446 + 4] == 0xEB, "missing BFS boot partition"
+          assert image[32769:32774] == b"CD001", "missing ISO9660 descriptor"
+
+          # A raw disk must be a whole number of 512 byte sectors.
+          assert len(image) % 512 == 0, "image size is not a multiple of 512"
+          print("size:", len(image), "bytes,", len(image) // 512, "sectors of 512")
+          print("MBR first 16 bytes:", image[:16].hex(" "))
+
+          # Reject the placeholder patterns a BIOS would spin on forever.
+          assert image[:2] != b"\xeb\xfe", "MBR is a jmp-to-self stub"
+          assert image[0] != 0xF4, "MBR starts with hlt"
+          assert image[:510].strip(b"\x00"), "MBR code is all zeros"
+          assert image[:510].strip(b"\xff"), "MBR code is all 0xFF"
+          print("MBR contains real boot code")
+
+          # The active partition must point at a volume with its own boot record.
+          entry = image[446:462]
+          assert entry[0] == 0x80, "BFS partition is not marked active"
+          start = struct.unpack_from("<I", entry, 8)[0]
+          count = struct.unpack_from("<I", entry, 12)[0]
+          assert image[start * 512 + 510:start * 512 + 512] == b"\x55\xaa", \
+              "partition boot record is missing its signature"
+          print("active partition: type 0xEB, start LBA", start, "sectors", count)
+          print("PC image layout is valid")
+          PY
+
+      - name: Create zip
+        env:
+          PACKAGE_NAME: PonedelnikOS-${{ github.sha }}.zip
+        run: (cd release && zip -qr "../$PACKAGE_NAME" PC)
+
+      - name: Upload package
+        uses: actions/upload-artifact@v6
+        with:
+          name: PonedelnikOS-${{ github.sha }}
+          path: PonedelnikOS-${{ github.sha }}.zip
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v6
+        with:
+          name: PonedelnikOS-iso-${{ github.sha }}
+          path: release/PC/PonedelnikOS.iso
+          compression-level: 0
+          retention-days: 14
+
+      - name: Prepare HDD image
+        run: |
+          # Same anyboot bytes under a disk extension - browser frontends often
+          # filter the hard disk picker to .img/.raw and refuse an .iso.
+          cp release/PC/PonedelnikOS.iso PonedelnikOS.img
+
+      - name: Upload HDD image
+        uses: actions/upload-artifact@v6
+        with:
+          name: PonedelnikOS-hdd-${{ github.sha }}
+          path: PonedelnikOS.img
+          compression-level: 0
+          retention-days: 14
+
+      - name: Boot PC profile in QEMU
+        run: |
+          : > qemu-serial.log
+          timeout 180s qemu-system-x86_64 \
+            -machine pc,accel=tcg \
+            -m 1024M \
+            -cdrom release/PC/PonedelnikOS.iso \
+            -boot d \
+            -display none \
+            -serial file:qemu-serial.log \
+            -monitor none \
+            -no-reboot \
+            -no-shutdown &
+          qemu_pid=$!
+
+          # Leave as soon as the kernel reported itself - no need to wait out
+          # the whole timeout.
+          # Time the silent stretch between the loader banner and the kernel
+          # banner. On the CD path the loader inflates the TAR boot archive
+          # there without printing anything, which looks like a hang.
+          started=$SECONDS
+          loader_at=""
+          for _ in $(seq 1 90); do
+            if [ -z "$loader_at" ] \
+              && grep -qF "Welcome to the PonedelnikOS boot loader" qemu-serial.log; then
+              loader_at=$SECONDS
+            fi
+            if grep -qF "Welcome to kernel debugger output" qemu-serial.log; then
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -n "$loader_at" ]; then
+            timing="loader banner at $((loader_at - started))s, kernel banner at $((SECONDS - started))s, silent archive phase $((SECONDS - loader_at))s"
+            echo "$timing"
+            echo "::notice title=CD boot timing::$timing"
+          fi
+          kill "$qemu_pid" 2>/dev/null || true
+          wait "$qemu_pid" 2>/dev/null || true
+
+          test -s qemu-serial.log
+          grep -F "Welcome to kernel debugger output" qemu-serial.log
+          grep -F "PonedelnikOS revision" qemu-serial.log
+
+      - name: Boot PC profile as a hard disk in QEMU
+        run: |
+          # The anyboot image also carries an active BFS partition and an MBR
+          # boot loader, so it boots as a plain disk without El Torito.
+          : > qemu-disk-serial.log
+          timeout 180s qemu-system-x86_64 \
+            -machine pc,accel=tcg \
+            -m 1024M \
+            -drive file=release/PC/PonedelnikOS.iso,format=raw,if=ide \
+            -boot c \
+            -display none \
+            -serial file:qemu-disk-serial.log \
+            -monitor none \
+            -no-reboot \
+            -no-shutdown &
+          qemu_pid=$!
+
+          # Only the kernel banner proves the kernel ran - the loader prints
+          # the same revision line much earlier.
+          for _ in $(seq 1 90); do
+            if grep -qF "Welcome to kernel debugger output" qemu-disk-serial.log; then
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          kill "$qemu_pid" 2>/dev/null || true
+          wait "$qemu_pid" 2>/dev/null || true
+
+          tail -n 60 qemu-disk-serial.log || true
+          if ! grep -qF "Welcome to kernel debugger output" qemu-disk-serial.log; then
+            echo "::error title=Disk boot::The kernel did not report itself on the disk boot path"
+            exit 1
+          fi
+          grep -F "PonedelnikOS revision" qemu-disk-serial.log
+
+      - name: Boot PC profile with a browser emulator device set
+        run: |
+          # Match a browser x86 emulator: one CPU, no ACPI, no USB, no NIC,
+          # 512 MiB RAM, Bochs VBE video and legacy PATA. The guest stays x86_64.
+          : > qemu-v86-serial.log
+          timeout 240s qemu-system-x86_64 \
+            -machine pc,accel=tcg,acpi=off,usb=off \
+            -cpu qemu64 \
+            -smp 1 \
+            -m 512M \
+            -vga std \
+            -net none \
+            -drive file=release/PC/PonedelnikOS.iso,format=raw,if=ide \
+            -boot c \
+            -display none \
+            -serial file:qemu-v86-serial.log \
+            -monitor none \
+            -no-reboot \
+            -no-shutdown &
+          qemu_pid=$!
+
+          for _ in $(seq 1 120); do
+            if grep -qF "Welcome to kernel debugger output" qemu-v86-serial.log; then
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          kill "$qemu_pid" 2>/dev/null || true
+          wait "$qemu_pid" 2>/dev/null || true
+
+          tail -n 60 qemu-v86-serial.log || true
+          test -s qemu-v86-serial.log
+          grep -F "Welcome to kernel debugger output" qemu-v86-serial.log
+          grep -F "PonedelnikOS revision" qemu-v86-serial.log
+
+      - name: Publish images as release assets
+        # Artifacts need a login and come as a zip - a release asset is a
+        # direct download that can be handed straight to an emulator.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/scripts/publish_release.py \
+            release/PC/PonedelnikOS.iso PonedelnikOS.img
+
+      - name: Show compiler cache stats
+        if: always()
+        run: ccache -s || true
+
+      - name: Upload boot and build logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ponedelnikos-logs-${{ github.sha }}
+          path: |
+            qemu-serial.log
+            qemu-disk-serial.log
+            qemu-v86-serial.log
+            build-pc.log
+          if-no-files-found: warn
+          retention-days: 14
