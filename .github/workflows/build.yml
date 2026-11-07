@@ -12,7 +12,7 @@ on:
         default: "hrev59866_5"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ponedelnikos-${{ github.workflow }}-${{ github.ref }}
@@ -324,6 +324,16 @@ jobs:
           test -s qemu-v86-serial.log
           grep -F "Welcome to kernel debugger output" qemu-v86-serial.log
           grep -F "PonedelnikOS revision" qemu-v86-serial.log
+
+      - name: Publish images as release assets
+        # Artifacts need a login and come as a zip - a release asset is a
+        # direct download that can be handed straight to an emulator.
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/scripts/publish_release.py \
+            release/PC/PonedelnikOS.iso PonedelnikOS.img
 
       - name: Show compiler cache stats
         if: always()
