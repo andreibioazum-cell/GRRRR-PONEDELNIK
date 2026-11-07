@@ -219,7 +219,16 @@ jobs:
 
           # Leave as soon as the kernel reported itself - no need to wait out
           # the whole timeout.
+          # Time the silent stretch between the loader banner and the kernel
+          # banner. On the CD path the loader inflates the TAR boot archive
+          # there without printing anything, which looks like a hang.
+          started=$SECONDS
+          loader_at=""
           for _ in $(seq 1 90); do
+            if [ -z "$loader_at" ] \
+              && grep -qF "Welcome to the PonedelnikOS boot loader" qemu-serial.log; then
+              loader_at=$SECONDS
+            fi
             if grep -qF "Welcome to kernel debugger output" qemu-serial.log; then
               break
             fi
@@ -228,6 +237,11 @@ jobs:
             fi
             sleep 2
           done
+          if [ -n "$loader_at" ]; then
+            echo "Loader banner at $((loader_at - started))s," \
+              "kernel banner at $((SECONDS - started))s," \
+              "silent archive phase $((SECONDS - loader_at))s"
+          fi
           kill "$qemu_pid" 2>/dev/null || true
           wait "$qemu_pid" 2>/dev/null || true
 
