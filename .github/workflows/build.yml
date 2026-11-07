@@ -238,9 +238,9 @@ jobs:
             sleep 2
           done
           if [ -n "$loader_at" ]; then
-            echo "Loader banner at $((loader_at - started))s," \
-              "kernel banner at $((SECONDS - started))s," \
-              "silent archive phase $((SECONDS - loader_at))s"
+            timing="loader banner at $((loader_at - started))s, kernel banner at $((SECONDS - started))s, silent archive phase $((SECONDS - loader_at))s"
+            echo "$timing"
+            echo "::notice title=CD boot timing::$timing"
           fi
           kill "$qemu_pid" 2>/dev/null || true
           wait "$qemu_pid" 2>/dev/null || true
