@@ -328,7 +328,6 @@ jobs:
       - name: Publish images as release assets
         # Artifacts need a login and come as a zip - a release asset is a
         # direct download that can be handed straight to an emulator.
-        if: github.event_name != 'pull_request'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
