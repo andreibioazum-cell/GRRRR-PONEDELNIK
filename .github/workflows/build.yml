@@ -220,7 +220,7 @@ jobs:
           # Leave as soon as the kernel reported itself - no need to wait out
           # the whole timeout.
           for _ in $(seq 1 90); do
-            if grep -qF "PonedelnikOS revision" qemu-serial.log; then
+            if grep -qF "Welcome to kernel debugger output" qemu-serial.log; then
               break
             fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then
@@ -236,7 +236,6 @@ jobs:
           grep -F "PonedelnikOS revision" qemu-serial.log
 
       - name: Boot PC profile as a hard disk in QEMU
-        continue-on-error: true
         run: |
           # The anyboot image also carries an active BFS partition and an MBR
           # boot loader, so it boots as a plain disk without El Torito.
@@ -253,8 +252,10 @@ jobs:
             -no-shutdown &
           qemu_pid=$!
 
+          # Only the kernel banner proves the kernel ran - the loader prints
+          # the same revision line much earlier.
           for _ in $(seq 1 90); do
-            if grep -qF "PonedelnikOS revision" qemu-disk-serial.log; then
+            if grep -qF "Welcome to kernel debugger output" qemu-disk-serial.log; then
               break
             fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then
@@ -266,11 +267,11 @@ jobs:
           wait "$qemu_pid" 2>/dev/null || true
 
           tail -n 60 qemu-disk-serial.log || true
-          if ! grep -qF "PonedelnikOS revision" qemu-disk-serial.log; then
+          if ! grep -qF "Welcome to kernel debugger output" qemu-disk-serial.log; then
             echo "::error title=Disk boot::The kernel did not report itself on the disk boot path"
             exit 1
           fi
-          grep -F "Welcome to kernel debugger output" qemu-disk-serial.log
+          grep -F "PonedelnikOS revision" qemu-disk-serial.log
 
       - name: Show compiler cache stats
         if: always()
