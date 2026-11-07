@@ -1620,7 +1620,11 @@ rule BuildCDBootImageEFI image : bootfloppy : bootefi : extrafiles
 actions BuildCDBootImageEFI1
 {
 	$(RM) $(<)
-	xorriso -as mkisofs -b $(BOOTIMG) -eltorito-alt-boot -no-emul-boot -e $(BOOTEFI) \
+	# Present the BIOS boot image as a hard disk, not a floppy. Emulators and
+	# recent machines often have no floppy controller, so floppy emulation
+	# stalls while the loader reads the boot archive.
+	xorriso -as mkisofs -b $(BOOTIMG) -hard-disk-boot \
+		-eltorito-alt-boot -no-emul-boot -e $(BOOTEFI) \
 		-r -J -V $(VOLID) -o $(<) $(>[1]) $(>[2]) $(>[3-])
 }
 
