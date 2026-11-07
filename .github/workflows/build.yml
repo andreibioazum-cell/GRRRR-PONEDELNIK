@@ -166,6 +166,20 @@ jobs:
           compression-level: 0
           retention-days: 14
 
+      - name: Prepare HDD image
+        run: |
+          # Same anyboot bytes under a disk extension - browser frontends often
+          # filter the hard disk picker to .img/.raw and refuse an .iso.
+          cp release/PC/PonedelnikOS.iso PonedelnikOS.img
+
+      - name: Upload HDD image
+        uses: actions/upload-artifact@v6
+        with:
+          name: PonedelnikOS-hdd-${{ github.sha }}
+          path: PonedelnikOS.img
+          compression-level: 0
+          retention-days: 14
+
       - name: Boot PC profile in QEMU
         run: |
           : > qemu-serial.log
