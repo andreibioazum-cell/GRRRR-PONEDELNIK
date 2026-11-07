@@ -779,15 +779,21 @@ TarFS::Volume::_Inflate(boot::Partition* partition, void* cookie, off_t offset,
 	int status;
 	char* out = (char*)regionDeleter.Get();
 	bool headerRead = false;
+	size_t blocksRead = 0;
 
 	do {
 		ssize_t bytesRead = partition->ReadAt(cookie, offset, in, kBufferSize);
-		if (bytesRead != (ssize_t)sizeof(in)) {
+		if (bytesRead != kBufferSize) {
 			if (bytesRead <= 0) {
 				status = Z_STREAM_ERROR;
 				break;
 			}
 		}
+
+		// Keep serial output alive while inflating. Slow emulators can spend
+		// a long time here, and a silent loader looks like a hung boot.
+		if (headerRead && (++blocksRead % 32) == 0)
+			dprintf(".");
 
 		zStream.avail_in = bytesRead;
 		zStream.next_in = (Bytef*)in;
@@ -822,6 +828,9 @@ TarFS::Volume::_Inflate(boot::Partition* partition, void* cookie, off_t offset,
 		if (zStream.avail_in != 0 && status != Z_STREAM_END)
 			dprintf("tarfs: didn't read whole block: %s\n", zStream.msg);
 	} while (status == Z_OK);
+
+	if (blocksRead >= 32)
+		dprintf("\n");
 
 	inflateEnd(&zStream);
 
