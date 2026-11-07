@@ -136,9 +136,8 @@ jobs:
 
           # The anyboot image must keep a bootable MBR and an ISO9660 volume.
           python3 - <<'PY'
-          from pathlib import Path
-
           import struct
+          from pathlib import Path
 
           image = Path("release/PC/PonedelnikOS.iso").read_bytes()
           assert image[510:512] == b"\x55\xaa", "missing MBR signature"
@@ -153,7 +152,7 @@ jobs:
           # Reject the placeholder patterns a BIOS would spin on forever.
           assert image[:2] != b"\xeb\xfe", "MBR is a jmp-to-self stub"
           assert image[0] != 0xF4, "MBR starts with hlt"
-          assert image[:510].strip(b"\x00") , "MBR code is all zeros"
+          assert image[:510].strip(b"\x00"), "MBR code is all zeros"
           assert image[:510].strip(b"\xff"), "MBR code is all 0xFF"
           print("MBR contains real boot code")
 
