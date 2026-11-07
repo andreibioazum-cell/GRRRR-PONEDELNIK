@@ -665,9 +665,12 @@ TarFS::Volume::Init(boot::Partition* partition)
 	// disk
 	RegionDeleter regionDeleter;
 	size_t inflatedBytes;
+	dprintf("tarfs: looking for boot archive at offset 0\n");
 	status_t status = _Inflate(partition, cookie, 0, regionDeleter,
 		&inflatedBytes);
 	if (status != B_OK) {
+		dprintf("tarfs: looking for boot archive at offset %lu\n",
+			(unsigned long)kFloppyArchiveOffset);
 		status = _Inflate(partition, cookie, kFloppyArchiveOffset,
 			regionDeleter, &inflatedBytes);
 	}
@@ -792,7 +795,10 @@ TarFS::Volume::_Inflate(boot::Partition* partition, void* cookie, off_t offset,
 
 		// Keep serial output alive while inflating. Slow emulators can spend
 		// a long time here, and a silent loader looks like a hung boot.
-		if (headerRead && (++blocksRead % 32) == 0)
+		blocksRead++;
+		if (blocksRead == 1)
+			dprintf("tarfs: first block read, %ld bytes\n", (long)bytesRead);
+		else if (headerRead && (blocksRead % 8) == 0)
 			dprintf(".");
 
 		zStream.avail_in = bytesRead;
@@ -829,7 +835,7 @@ TarFS::Volume::_Inflate(boot::Partition* partition, void* cookie, off_t offset,
 			dprintf("tarfs: didn't read whole block: %s\n", zStream.msg);
 	} while (status == Z_OK);
 
-	if (blocksRead >= 32)
+	if (blocksRead >= 8)
 		dprintf("\n");
 
 	inflateEnd(&zStream);
