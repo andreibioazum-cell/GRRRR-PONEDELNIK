@@ -77,11 +77,11 @@ rule DefineDefaultBuildProfiles
 
 	switch $(HAIKU_BUILD_PROFILE) {
 		case "release-*" : {
-			Echo Building Haiku R1/development preview ;
+			Echo Building PonedelnikOS R1/development preview ;
 			HAIKU_ROOT_USER_NAME ?= user ;
 			HAIKU_ROOT_USER_REAL_NAME ?= "Yourself" ;
 			AddGroupToHaikuImage party : 101 : user sshd ;
-			HAIKU_IMAGE_HOST_NAME ?= shredder ;
+			HAIKU_IMAGE_HOST_NAME ?= ponedelnik ;
 
 			if $(HAIKU_INCLUDE_SOURCES) = 1 || $(DEBUG) != 0 {
 				HAIKU_IMAGE_SIZE ?= 1400 ;
@@ -133,11 +133,11 @@ rule DefineDefaultBuildProfiles
 		}
 
 		case "nightly-*" : {
-			Echo Building Haiku Nightly ;
+			Echo Building PonedelnikOS Nightly ;
 			HAIKU_ROOT_USER_NAME ?= user ;
 			HAIKU_ROOT_USER_REAL_NAME ?= "Yourself" ;
 			AddGroupToHaikuImage party : 101 : user sshd ;
-			HAIKU_IMAGE_HOST_NAME ?= shredder ;
+			HAIKU_IMAGE_HOST_NAME ?= ponedelnik ;
 			if $(DEBUG) != 0 {
 				HAIKU_IMAGE_SIZE ?= 850 ;
 			}
@@ -178,22 +178,28 @@ rule DefineDefaultBuildProfiles
 		}
 
 		case "minimum-*" : {
-			Echo Building Haiku Minimum Target ;
-			HAIKU_IMAGE_HOST_NAME ?= shredder ;
+			Echo Building PonedelnikOS Minimum Target ;
+			HAIKU_ROOT_USER_NAME ?= user ;
+			HAIKU_ROOT_USER_REAL_NAME ?= "Yourself" ;
+			HAIKU_IMAGE_HOST_NAME ?= ponedelnik ;
 			if $(DEBUG) != 0 {
 				HAIKU_IMAGE_SIZE ?= 450 ;
 			}
 
+			# Noto supplies the UI fonts - without them the desktop draws no
+			# labels. The default sound theme makes the desktop feel complete.
 			AddHaikuImageSystemPackages
+				noto
 				openssl3
+				sounds_community_default
 				;
 		}
 
 		case "test-*" : {
-			Echo Building Haiku UnitTest Target ;
+			Echo Building PonedelnikOS UnitTest Target ;
 			HAIKU_ROOT_USER_NAME = user ;
 			HAIKU_ROOT_USER_REAL_NAME = "Tester" ;
-			HAIKU_IMAGE_HOST_NAME ?= shredder ;
+			HAIKU_IMAGE_HOST_NAME ?= ponedelnik ;
 			if $(DEBUG) != 0 {
 				HAIKU_IMAGE_SIZE ?= 450 ;
 			} else {
@@ -212,8 +218,8 @@ rule DefineDefaultBuildProfiles
 		}
 
 		case "bootstrap-*" : {
-			Echo Building Haiku Bootstrap ;
-			HAIKU_IMAGE_HOST_NAME ?= shredder ;
+			Echo Building PonedelnikOS Bootstrap ;
+			HAIKU_IMAGE_HOST_NAME ?= ponedelnik ;
 			HAIKU_IMAGE_SIZE ?= 20000 ;
 
 			AddHaikuImageSystemPackages

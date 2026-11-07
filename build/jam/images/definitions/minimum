@@ -139,6 +139,14 @@ SYSTEM_APPS = [ FFilterByBuildFeatures
 	Installer
 	NetworkStatus
 	ProcessController
+	ActivityMonitor
+	AutoRaise
+	LaunchBox
+	Magnify
+	People
+	PowerStatus
+	Screenshot
+	SerialConnect
 	ShowImage
 	StyledEdit
 	Terminal
@@ -147,6 +155,7 @@ SYSTEM_APPS = [ FFilterByBuildFeatures
 ] ;
 
 DESKBAR_APPLICATIONS =
+	ActivityMonitor
 	CharacterMap
 	DeskCalc
 	Devices
@@ -155,12 +164,18 @@ DESKBAR_APPLICATIONS =
 	DriveSetup
 	Expander
 	Installer
+	LaunchBox
+	Magnify
+	People
+	Screenshot
+	SerialConnect
 	StyledEdit
 	Terminal
 ;
 
 DESKBAR_DESKTOP_APPLETS =
 	NetworkStatus
+	PowerStatus
 	ProcessController
 	Workspaces
 ;
@@ -273,7 +288,17 @@ SYSTEM_ADD_ONS_ACCELERANTS = [ FFilterByBuildFeatures
 ] ;
 
 SYSTEM_ADD_ONS_TRANSLATORS =
+	BMPTranslator
+	GIFTranslator
+	HVIFTranslator
+	ICOTranslator
+	PCXTranslator
+	PPMTranslator
+	PSDTranslator
+	RTFTranslator
+	SGITranslator
 	STXTTranslator
+	TGATranslator
 ;
 
 SYSTEM_ADD_ONS_LOCALE_CATALOGS =

@@ -377,14 +377,14 @@ BootPromptWindow::_UpdateStrings()
 	BString desktopTextHaiku = B_TRANSLATE("Try Haiku");
 	BString installTextHaiku = B_TRANSLATE("Install Haiku");
 
-	BString titleTextDebranded = B_TRANSLATE("Welcome!");
+	BString titleTextDebranded = B_TRANSLATE("Welcome to PonedelnikOS!");
 	BString mainTextDebranded = B_TRANSLATE_COMMENT(
-			"Thank you for trying out our operating system! We hope you'll "
+			"Thank you for trying out PonedelnikOS! We hope you'll "
 			"like it!\n\n"
 			"Please select your preferred language and keymap. Both settings "
 			"can also be changed later.\n\n"
 
-			"Do you wish to install the operating system now, or try it out "
+			"Do you wish to install PonedelnikOS now, or try it out "
 			"first?",
 
 			"This notice appears when the build of Haiku that's currently "
@@ -394,8 +394,8 @@ BootPromptWindow::_UpdateStrings()
 			"an on-going effort. You will frequently encounter untranslated "
 			"strings, but if you like, you can join in the work at "
 			"<www.haiku-os.org>.\"");
-	BString desktopTextDebranded = B_TRANSLATE("Try it out");
-	BString installTextDebranded = B_TRANSLATE("Install");
+	BString desktopTextDebranded = B_TRANSLATE("Try PonedelnikOS");
+	BString installTextDebranded = B_TRANSLATE("Install PonedelnikOS");
 
 #ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 	SetTitle(titleTextHaiku);
