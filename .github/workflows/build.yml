@@ -138,10 +138,33 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
+          import struct
+
           image = Path("release/PC/PonedelnikOS.iso").read_bytes()
           assert image[510:512] == b"\x55\xaa", "missing MBR signature"
           assert image[446 + 4] == 0xEB, "missing BFS boot partition"
           assert image[32769:32774] == b"CD001", "missing ISO9660 descriptor"
+
+          # A raw disk must be a whole number of 512 byte sectors.
+          assert len(image) % 512 == 0, "image size is not a multiple of 512"
+          print("size:", len(image), "bytes,", len(image) // 512, "sectors of 512")
+          print("MBR first 16 bytes:", image[:16].hex(" "))
+
+          # Reject the placeholder patterns a BIOS would spin on forever.
+          assert image[:2] != b"\xeb\xfe", "MBR is a jmp-to-self stub"
+          assert image[0] != 0xF4, "MBR starts with hlt"
+          assert image[:510].strip(b"\x00") , "MBR code is all zeros"
+          assert image[:510].strip(b"\xff"), "MBR code is all 0xFF"
+          print("MBR contains real boot code")
+
+          # The active partition must point at a volume with its own boot record.
+          entry = image[446:462]
+          assert entry[0] == 0x80, "BFS partition is not marked active"
+          start = struct.unpack_from("<I", entry, 8)[0]
+          count = struct.unpack_from("<I", entry, 12)[0]
+          assert image[start * 512 + 510:start * 512 + 512] == b"\x55\xaa", \
+              "partition boot record is missing its signature"
+          print("active partition: type 0xEB, start LBA", start, "sectors", count)
           print("PC image layout is valid")
           PY
 
