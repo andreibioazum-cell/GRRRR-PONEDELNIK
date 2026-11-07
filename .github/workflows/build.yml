@@ -273,6 +273,44 @@ jobs:
           fi
           grep -F "PonedelnikOS revision" qemu-disk-serial.log
 
+      - name: Boot PC profile with a browser emulator device set
+        run: |
+          # Match a browser x86 emulator: one CPU, no ACPI, no USB, no NIC,
+          # 512 MiB RAM, Bochs VBE video and legacy PATA. The guest stays x86_64.
+          : > qemu-v86-serial.log
+          timeout 240s qemu-system-x86_64 \
+            -machine pc,accel=tcg,acpi=off,usb=off \
+            -cpu qemu64 \
+            -smp 1 \
+            -m 512M \
+            -vga std \
+            -net none \
+            -drive file=release/PC/PonedelnikOS.iso,format=raw,if=ide \
+            -boot c \
+            -display none \
+            -serial file:qemu-v86-serial.log \
+            -monitor none \
+            -no-reboot \
+            -no-shutdown &
+          qemu_pid=$!
+
+          for _ in $(seq 1 120); do
+            if grep -qF "Welcome to kernel debugger output" qemu-v86-serial.log; then
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          kill "$qemu_pid" 2>/dev/null || true
+          wait "$qemu_pid" 2>/dev/null || true
+
+          tail -n 60 qemu-v86-serial.log || true
+          test -s qemu-v86-serial.log
+          grep -F "Welcome to kernel debugger output" qemu-v86-serial.log
+          grep -F "PonedelnikOS revision" qemu-v86-serial.log
+
       - name: Show compiler cache stats
         if: always()
         run: ccache -s || true
@@ -285,6 +323,7 @@ jobs:
           path: |
             qemu-serial.log
             qemu-disk-serial.log
+            qemu-v86-serial.log
             build-pc.log
           if-no-files-found: warn
           retention-days: 14
